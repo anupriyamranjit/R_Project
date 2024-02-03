@@ -1,0 +1,22 @@
+
+
+```{r}
+knitr::opts_chunk$set(echo = TRUE)
+data1 <- read.csv('./Fraud.csv')
+```
+
+```{r}
+data_original <- data1
+```
+
+
+
+```{r}
+str(data_original)
+summary(data_original)
+```
+```{r}
+hist(data_original$amount, breaks = 100, xlim = c(0, 2000000))
+
+```
+

@@ -1,0 +1,1 @@
+"0","hist(data_original$amount, breaks = ""Sturges"", xlim = c(0, 2000000))"

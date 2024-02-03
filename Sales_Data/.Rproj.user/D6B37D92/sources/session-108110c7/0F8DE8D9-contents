@@ -1,0 +1,278 @@
+---
+title: "Pilgrim Bank Classification"
+author: "mpavlin@wlu.ca"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Note that this document cannot be shared outside of this class due to copyright restrictions associated with the case.
+
+### Business question:
+Can we predict whether a customer will leave the bank?
+
+## 1. Load the data
+
+```{r}
+pgdata <- read.csv("pilgrim_bank_data.csv")
+pgdata_original <- pgdata
+str(pgdata)
+```
+
+* Any obvious issues with the data?
+
+```{r}
+pgdata$X9District <- as.factor(pgdata$X9District)
+str(pgdata)
+summary(pgdata)
+```
+
+## 2. Describe the data
+
+As always, begin analysis by getting a feel for the data.
+
+* What does the profitability of these customers look like?
+    + histogram gives an empirical estimate of the PDF of the variable
+    + Density plot gives 
+```{r}
+hist(pgdata$X9Profit)
+plot(density(pgdata$X9Profit))
+```
+
+* Plot the proportion of profits below a particular level
+    + the empirical cumulative distribution is an estimate of the CDF
+    + Similar information to the histogram but not as sensitive to parameters like the number of bins
+```{r}
+plot(ecdf(pgdata$X9Profit))
+```
+
+* Scatter plots between variables can give an idea of degree of relationships between dependent and independent variables and degree of collinearity between variables
+* Scatter plots en masse
+```{r}
+pairs(~X9Age+X9Inc+X9Tenure+X9Profit,data=pgdata[sample(nrow(pgdata),100),],main="Plots")
+```
+
+
+## 3. Preparing the data
+
+* Note that in the previous summary quite a few rows are missing!
+* We could just delete the data 
+* This is an easy way to deal with missing elements
+    + But what are the downsides?
+
+### Handling the missing age and income data
+
+* Strategy 1: delete rows with missing data
+    + Fine if data is missing completely at random and we have lots of data
+* Strategy 2: assign default variable value to missing data
+    + typically the mean value
+    + tends to attenuate results
+* Strategy 3: give default value to missing data and add a dummy variable indicating whether data was missing
+    + An age exists column which would contain some of the information we can't observe about why the data was deleted
+    + Results in biased coefficient estimates
+    + Works GREAT for predictive analysis
+* Strategy 4: impute the missing data with regression
+    + tends to suggest more precise estimates than warranted
+    + UNNECESSARY AND LIKELY DETRIMENTAL FOR PREDICTIVE/ML ANALYSIS
+* Strategy 5: multiple imputation
+    + estimates a distribution for missing data 
+    + replaces missing values with draws from the distribution
+    + implemented in R with the "mice" method
+    + state-of-the-art in dealing with missing data for causal analysis
+    + UNNECESSARY AND LIKELY DETRIMENTAL FOR PREDICTIVE/ML ANALYSIS
+
+
+We will now test out some of these ways of handling missing data
+
+
+### Method 2
+
+Requires data preprocessing:
+
+```{r}
+# compact version
+pgdata$IncMeaned <- pgdata$X9Inc
+pgdata$IncMeaned[is.na(pgdata$IncMeaned)] <- mean(pgdata$X9Inc[!is.na(pgdata$X9Inc)])
+
+# using more variables to make it more readable
+ageMissing <- is.na(pgdata$X9Age)
+meanAge <-mean(pgdata$X9Age[!ageMissing])
+
+pgdata$AgeMeaned <- pgdata$X9Age
+pgdata$AgeMeaned[ageMissing]<-meanAge
+```
+
+### Method 3
+
+Just add new columns containing information about missingness.
+```{r}
+pgdata$AgeExists <- !is.na(pgdata$X9Age) 
+pgdata$IncExists <- !is.na(pgdata$X9Inc) 
+```
+
+## Define target (dependent) variable
+
+* We are interested in whether the customer is retained 
+  + i.e. are they present in 2000
+  + Easily created with the true/false function is.na 
+```{r}
+pgdata$X9District <- as.factor(pgdata$X9District)
+pgdata$y <- !is.na(pgdata$X0Profit)
+```
+
+## Generate a training and test set.
+
+* first calculate the sample size
+  + 75% of the rows in the data set
+  + nrow(dta) returns the number of rows in the 'data' data-frame
+```{r}
+set.seed(4)
+smp_size <- floor(0.75 * nrow(pgdata))
+smp_size
+```
+
+* generate the indices for the training set
+  + note, 1:nrow(dta) gives a list of all indices e.g. [1,2,3,4..,nrow(dta)]
+
+```{r}
+set.seed(3)
+train_ind <- sample(1:nrow(pgdata), size = smp_size)
+```
+
+* make the training and test sets by slicing the original data set
+```{r}
+train <- pgdata[train_ind, ]
+test <- pgdata[-train_ind, ]
+```
+
+## 2. Generate a classifier
+
+* Use logistical regression on training set to create a classification model
+* y~x1+x2+... is the regression formula exactly of the same form as for a linear regression
+* by setting dta=train we are using **only the training data** to build the classification model
+```{r}
+cls <- glm(y~X9Profit+X9Online+AgeMeaned+IncMeaned+AgeExists+X9District+X9Billpay, family='binomial',data=train)
+```
+
+## 3. Assess training error
+* Define the cut as the threshold where a glm probability prediction less than the cut is classified as a False (not retained) and a probability greater that the cut is classified as a True (Retained)
+```{r}
+cut=0.5
+```
+
+* Store the predicted classes in yhat
+* Calculate error by comparing the true values with classified values 
+
+* We use the predict function to determine the classified values for the test set
+* Basically all R functions have predict functions
+* The predict function for a glm model requires specifying the type of prediction
+  + for a probability prediction use type="response"
+
+```{r}
+yhat = (predict(cls,train,type="response")>cut)
+tr.err = mean(train$y != yhat) 
+tr.err
+```
+
+##   And another mini assignment
+
+1. *Calculate the testing error*
+
+```{r}
+# calculate the testing error in a similar manner to the training error
+yhat = (predict(cls,test,type="response")>cut)
+te.err = mean(test$y != yhat) 
+print(te.err)
+#print(predict(cls,test,type="response")>cut)
+```
+
+2. *Compare the predictor to a benchmark*
+
+*Now, lets compare our logistic regression (LR) predictor to a benchmark. Consider the Naive predictor where we `predict' that all customers will stay at the bank. How much better (or worse) does the(LR) predictor do? You can calculate the errors for the Naive predictor without building a model but you will need to do a little bit of exploration. Do that work in the following code block:*
+
+```{r}
+# calculation of Naive predictor error rate
+
+# so the Naive predictor will simply predict all customers stay...
+# so it will make errors on each customer that leaves the bank
+
+trN.err <- mean(!train$y)
+teN.err <- mean(!test$y)
+
+print(paste("Naive train error",trN.err))
+print(paste("Naive test error",teN.err))
+
+```
+
+3. *Write a conclusion*
+
+*Finally, write two short paragraph in the first compare the training and testing error for the LR predictor and consider there is evidence of overfitting and in the second compare the error rates for the Naive and LR predictors.*
+
+It is pretty clear we are not overfitting. The test and train error are very close together.
+
+It is very clear that the logistic regression is not producing a useful outcome. The naive approach has almost exactly the same error levels. If we examine the actual 
+
+## Part II Mini Assignment
+
+4. *Generate a decision tree classifier.* 
+
+*Using the rpart decision tree model (part of the rpart library), generate a decision tree classifier trained on the training set and evaluated on the testing set. The function usage is:*
+
+> rpart(formula,method="class", data=train, cp=0.001)
+
+*Where method controls whether it is a classifier or a regression tree and cp controls the improvement threshold to make a split. Higher cp leads to smaller trees. Compare the training and testing error for cp=0.01, cp=0.001 and cp=0.00001 (use the same variables as for the logistic regression classifier). You will need to use the predict function here as well. Note that you can use type='class' to output a True or False that can be compared directly to the actual value of y in the train/test set.*
+
+```{r}
+# decision trees start here!
+```
+
+
+5. *Write a 2-3 sentence conclusion about your decision tree classifiers.*
+
+
+## Part III Mini Assignment
+
+### Investigate how logistic regression misclassification depends on the classification threshold
+* I've written some functions to help evaluate classification error
+* They include calculations of the sensitivity, specificity, and classification rate
+* Read in the classification script (needs to be in the working directory)
+```{r}
+source("classification_functions.R")
+```
+
+* check different error on the training and testing data
+```{r}
+perf(cut,cls,train,train$y)
+```
+```{r}
+perf(cut,cls,test,test$y)
+```
+
+* Plot for different threshold values
+```{r}
+errs <- thresholds(cls,test,test$y)
+plot(errs$threshold,errs$prob_tn)
+```
+
+
+6. *plot the ROC curve*
+
+```{r}
+# use plot or ggplot to plot the ROC curve
+```
+
+
+7. *select an optimal threshold if (1) it costs $100 for every person that leaves the bank (2) the bank has a \$25/person promotion that can be targeted to customers that will leave and is 100% effective at keeping the customer.*
+
+```{r}
+# using the cost of errors determine the optimal threshold
+```
+
+
+## Please submit this to the S3 dropbox when complete
+
+
