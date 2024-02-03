@@ -6,7 +6,6 @@ knitr::opts_chunk$set(echo = TRUE)
 ```{r}
 
 # Import Data
-# Using fread since the file is so large it takes a long time to load using read.csv
 data1 <- read.csv('./Fraud.csv')
 ```
 
