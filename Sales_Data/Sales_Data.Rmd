@@ -6,21 +6,31 @@ knitr::opts_chunk$set(echo = TRUE)
 ```{r}
 
 # Import Data
-data1 <- read.csv('./Fraud.csv')
+data_original <- read.csv('./Fraud.csv')
 ```
 
 ```{r}
 # Copy Data
-data_original <- data1
+data_copy <- data_original
 ```
 
 ```{r}
 # See Structure of Data and Summary for any issues 
-str(data_original)
-summary(data_original)
+str(data_copy)
+summary(data_copy)
 ```
 
 ```{r}
 # Check Number of NA values in data
-sum(is.na(data_original))
+sum(is.na(data_copy))
+```
+
+```{r}
+# Preprocess Data 
+data_copy$merchant <- ifelse(substr(data_copy$nameDest, 1, 1) == 'M', TRUE, FALSE)
+data_copy$isFraud <- as.logical(data_copy$isFraud)
+data_copy$isFlaggedFraud <- NULL
+data_copy$type <- as.factor(data_copy$type)
+data_copy
+summary(data_copy)
 ```
