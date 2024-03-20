@@ -34,3 +34,28 @@ data_copy$type <- as.factor(data_copy$type)
 data_copy
 summary(data_copy)
 ```
+
+
+```{r}
+set.seed(10)
+smp_size <- floor(0.75 * nrow(data_copy))
+smp_size
+
+set.seed(100)
+train_ind <- sample(1:nrow(data_copy), size = smp_size)
+
+train <- data_copy[train_ind, ]
+test <- data_copy[-train_ind, ]
+```
+
+
+
+
+
+```{r}
+
+```
+
+
+
+
