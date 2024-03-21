@@ -30,6 +30,8 @@ sum(is.na(data_copy))
 data_copy$merchant <- ifelse(substr(data_copy$nameDest, 1, 1) == 'M', TRUE, FALSE)
 data_copy$isFraud <- as.logical(data_copy$isFraud)
 data_copy$isFlaggedFraud <- NULL
+data_copy$nameOrig <- NULL
+data_copy$nameDest <- NULL
 data_copy$type <- as.factor(data_copy$type)
 data_copy
 summary(data_copy)
@@ -53,9 +55,80 @@ test <- data_copy[-train_ind, ]
 
 
 ```{r}
+library(tidyverse)
+library(keras)
+library(neuralnet)
+install_tensorflow
 
 ```
 
+```{r}
+
+
+checkpoint_path <- "training_1/cp.ckpt"
+checkpoint_dir <- fs::path_dir(checkpoint_path)
+
+
+
+# Define predictor variables
+predictor_vars <- c("step", "amount", "oldbalanceOrg", "newbalanceOrig", "oldbalanceDest", "newbalanceDest")
+formula <- as.formula(paste("isFraud ~", paste(predictor_vars, collapse = "+")))
+
+
+if (file.exists("savename.hdf5")) {
+  
+  loaded_model <- load_model_hdf5("savename.hdf5")
+  message("Loaded weights from checkpoint.")
+  
+} else {
+  
+  model <- keras_model_sequential() %>%
+  layer_dense(units = 4, activation = "relu", input_shape = length(predictor_vars)) %>%
+  layer_dense(units = 2, activation = "relu") %>%
+  layer_dense(units = 1, activation = "sigmoid")
+
+
+# Compile the model
+model %>% compile(
+  loss = "binary_crossentropy",
+  optimizer = optimizer_adam(),
+  metrics = "accuracy"
+)
+
+
+cp_callback <- callback_model_checkpoint(
+  filepath = checkpoint_path,
+  save_weights_only = TRUE,
+  verbose = 1
+)
+
+# Train the model
+history <- model %>% fit(
+  x = as.matrix(train[predictor_vars]),
+  y = train$isFraud,
+  epochs = 10,
+  batch_size = 32,
+  validation_split = 0.2,  # Split data for validation
+  callbacks = list(cp_callback) # Pass callback to training
+)
+
+model %>% save_model_hdf5("./savename.hdf5")
+  
+}
+
+# Evaluate the model
+model %>% evaluate(
+  x = as.matrix(test[predictor_vars]),
+  y = test$isFraud
+)
+
+```
+
+```{r}
+results <- data.frame(Actual = test$isFraud, Predicted = predicted_classes)
+conf_matrix <- table(Actual = results$Actual, Predicted = results$Predicted)
+print(conf_matrix)
+```
 
 
 
