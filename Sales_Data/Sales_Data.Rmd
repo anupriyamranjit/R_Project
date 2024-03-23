@@ -1,28 +1,45 @@
+---
+title: "Fraud Classification"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+## Business Question
+Can we predict whether a transaction is fraud?
+
+## Setup and Initialization
+
 ```{r}
 # Setup
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+### Data Import
 ```{r}
-
 # Import Data
 data_original <- read.csv('./Fraud.csv')
+
 ```
 
 ```{r}
 # Copy Data
 data_copy <- data_original
+
 ```
 
+### Data Cleaning and Preprocessing
 ```{r}
 # See Structure of Data and Summary for any issues 
 str(data_copy)
 summary(data_copy)
+
 ```
 
 ```{r}
 # Check Number of NA values in data
 sum(is.na(data_copy))
+
 ```
 
 ```{r}
@@ -30,32 +47,239 @@ sum(is.na(data_copy))
 data_copy$merchant <- ifelse(substr(data_copy$nameDest, 1, 1) == 'M', TRUE, FALSE)
 data_copy$isFraud <- as.logical(data_copy$isFraud)
 data_copy$isFlaggedFraud <- NULL
-data_copy$type <- as.factor(data_copy$type)
-data_copy
+data_copy$nameOrig <- NULL
+data_copy$nameDest <- NULL
+data_copy$type <- as.integer(as.factor(data_copy$type))
 summary(data_copy)
+
 ```
 
-
+### Training and Testing Sets Creation
 ```{r}
+# Create Training and Testing Sets
 set.seed(10)
 smp_size <- floor(0.75 * nrow(data_copy))
-smp_size
+print(paste("Sample size: ", smp_size))
 
 set.seed(100)
 train_ind <- sample(1:nrow(data_copy), size = smp_size)
 
 train <- data_copy[train_ind, ]
 test <- data_copy[-train_ind, ]
+
+```
+
+## Avoiding Complexity: Feature (Model) Selection
+We want to avoid complexity by tuning the classification model complexity to the classification task. We want to ensure there are not too many features which can lead to overfitting while too few and the model can not learn good rules. The Regularization method will be used here with a Lasso (L1) penalty function. 
+
+This is because L1 tends to shrink coefficients to zero whereas Ridge (L2) tends to shrink coefficients evenly. L1 is therefore useful for feature selection, as we can drop any variables associated with coefficients that go to zero.
+
+Ref: https://explained.ai/regularization/L1vsL2.html \
+Ref: https://www.statology.org/lasso-regression-in-r/ \
+
+First, we need to define the response variable and all the features as a matrix
+```{r}
+# lets define the response variable
+y <- train$isFraud
+
+# lets define a matrix of all features except for the columns related to the response variable
+all_column_names <- colnames(train)
+all_columns_noFraud <- all_column_names[all_column_names != "isFraud"]
+x <- data.matrix(train[, all_columns_noFraud])
+```
+
+Then, we need to determine the optimal lambda value to use which will be done using cross-validation (CV)
+```{r}
+library(glmnet)
+library(Matrix)
+
+if (file.exists("./cv_model.RData")) {
+  # load cv_model
+  load("./cv_model.RData")
+  
+} else {
+  # create cv_model
+  
+  # perform k-fold cross-validation to find optimal lambda value (using the default k=10 folds)
+  # use alpha=1 as we want to fit the lasso regression model
+  cv_model <- cv.glmnet(x, y, alpha = 1, parallel = TRUE)
+  
+  # save cv_model
+  save(cv_model, file="./cv_model.RData")
+
+}
+
+# determine optimal lambda value that minimizes test mean squared error (MSE)
+optimal_lambda <- cv_model$lambda.min
+print("The Optimal Lambda is:")
+optimal_lambda
+
+# produce plot of test mean squared error (MSE) by lambda value
+plot(cv_model)
+
+```
+
+Finally, we can use the optimal lambda value to determine coefficient estimates for each variable
+```{r}
+if (file.exists("./regularized_model.RData")) {
+  # load regularized_model
+  load("./regularized_model.RData")
+  
+} else {
+  # create regularized_model
+  
+  # determine coefficient estimates for each variable of the regularized model
+  regularized_model <- glmnet(x, y, alpha = 1, lambda = optimal_lambda)
+  
+  # save regularized_model
+  save(regularized_model, file="./regularized_model.RData")
+
+}
+
+# create coefficient matrix
+coef_matrix <- coef(regularized_model)
+coef_matrix
+```
+
+Let's construct a formula with only the significant features.
+```{r}
+# drop the Intercept column as it is not needed
+row_index <- which(rownames(coef_matrix) == "(Intercept)")
+coef_matrix_noIntercept <- coef_matrix[-row_index, , drop = FALSE]
+
+# store only the feature names that don't have a coefficient of 0
+ideal_features <- rownames(coef_matrix_noIntercept)[coef_matrix_noIntercept[, 1] != 0][]
+ideal_features
+
+# construct the formula as a string
+formula_string <- paste("isFraud ~", paste(ideal_features, collapse = " + "))
+formula_string
+
+# convert the formula string to a formula object
+formula_object <- as.formula(formula_string)
+print("Final relation:")
+print(formula_object)
+
+```
+
+## Model 1: Logistic Regression
+
+## Model 2: Decision Tree Classifier Model
+
+### Classifier Generation
+
+We can generate a decision tree classifier trained on the training set and evaluated on the testing set. Since complexity parameter (cp) controls the improvement threshold to make a split, we can compare different thresholds.
+```{r}
+# define and train each of the classifiers
+library(rpart)
+
+```
+
+```{r}
+if (file.exists("./tree1.RData")) {
+  # load tree1
+  load("./tree1.RData")
+  
+} else {
+  # create tree1
+  tree1 <- rpart(formula_object,method="class", data=train, cp=0.01)
+  
+  # save tree1
+  save(tree1, file="./tree1.RData")
+
+}
+
+
 ```
 
 
+``` {r}
+if (file.exists("./tree2.RData")) {
+  # load tree2
+  load("./tree2.RData")
+  
+} else {
+  # create tree2
+  tree2 <- rpart(formula_object,method="class", data=train, cp=0.001)
+  
+  # save tree2
+  save(tree2, file="./tree2.RData")
 
+}
+
+```
 
 
 ```{r}
+if (file.exists("./tree3.RData")) {
+  # load tree3
+  load("./tree3.RData")
+  
+} else {
+  # create tree3
+  tree3 <- rpart(formula_object,method="class", data=train, cp=0.00001)
+  
+  # save tree3
+  save(tree3, file="./tree3.RData")
+
+}
 
 ```
 
 
+### Training and Testing Error Assessment
+
+Now, lets compare the training and testing error for cp=0.01, cp=0.001, and cp=0.00001
+```{r}
+treeErr <- function(tree, test_dataset, train_dataset)
+{
+  test_pred = predict(tree,test_dataset,type="class")
+  test_err = mean(test_dataset$isFraud != test_pred)
+  
+  
+  train_pred = predict(tree,train_dataset,type="class")
+  train_err = mean(train_dataset$isFraud != train_pred)
+  
+  test_acc = 1 - test_err
+  
+  conf_matrix <- table(Actual = test_dataset$isFraud, Predicted = test_pred)
+  
+  result_df <- data.frame(
+    Metric = c("Train Error", "Test Error", "Accuracy"),
+    Value = c(train_err, test_err, test_acc)
+  )
+  
+  return(list(result_df, Confusion_Matrix = conf_matrix))
+  
+}
+```
 
 
+```{r}
+# Errors for tree1
+tree1Err <- treeErr(tree1, test, train)
+print(tree1Err)
+
+```
+
+```{r}
+# Errors for tree2
+tree2Err <- treeErr(tree2, test, train)
+print(tree2Err)
+
+```
+
+```{r}
+# Errors for tree3
+tree3Err <- treeErr(tree3, test, train)
+print(tree3Err)
+
+```
+
+It is clear that for cp=0.01 the tree is underfit as it does not split and defaults to classifying all transactions as fraud. For cp=0.001 the training error and testing error improve but only slightly. For cp=0.000001, the tree is much more complex and we see evidence of overfitting.
+
+## Model 3: Support Vector Machine (SVM) Model
+
+## Model 4: K-Nearest Neighbours (KNN) Model
+
+## Model 5: Neural Net (NN) Model
