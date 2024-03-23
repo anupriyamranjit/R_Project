@@ -299,6 +299,43 @@ It is clear that for cp=0.01 the tree is underfit as it does not split and defau
 
 ## Model 4: K-Nearest Neighbours (KNN) Model
 
+```{r}
+
+#KNN
+
+library(FNN)  # Faster k-nearest neighbor algorithm implementation
+library(doParallel)  # For parallel computation if needed
+
+# Example parallelization setup
+# Adjust the number of cores as per your machine's configuration
+cores <- 4
+registerDoParallel(cores=cores)
+
+class_labels <- train$isFraud  # Assuming "isFraud" is the target variable
+train_features <- train[, -which(names(train) == "isFraud")]  # Exclude the target variab
+test_features <- test[, -which(names(test) == "isFraud")]  # Exclude the target variab
+
+# Example of using FNN library which might be faster
+test_pred <- knn(train_features, test = test_features, cl = class_labels, k = 10)
+
+# Stop parallel computation
+stopImplicitCluster()
+
+
+
+```
+
+```{r}
+actual <- test$isFraud
+cm <- table(actual,test_pred)
+cm
+```
+```{r}
+accuracy <- sum(diag(cm))/length(actual)
+sprintf("KNN Accuracy: %.10f%%", accuracy*100)
+```
+
+
 ## Model 5: Neural Net (NN) Model
 
 ```{r}
@@ -313,8 +350,6 @@ library(tensorflow)
 
 checkpoint_path <- "training_2/cp.ckpt"
 checkpoint_dir <- fs::path_dir(checkpoint_path)
-
-class_weights <- c(1, 50)
 
 
 # Define predictor variables
