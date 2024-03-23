@@ -283,3 +283,85 @@ It is clear that for cp=0.01 the tree is underfit as it does not split and defau
 ## Model 4: K-Nearest Neighbours (KNN) Model
 
 ## Model 5: Neural Net (NN) Model
+
+```{r}
+library(tidyverse)
+library(keras)
+library(tensorflow)
+
+```
+
+```{r}
+
+
+checkpoint_path <- "training_2/cp.ckpt"
+checkpoint_dir <- fs::path_dir(checkpoint_path)
+
+class_weights <- c(1, 50)
+
+
+# Define predictor variables
+predictor_vars <- c("step", "amount", "oldbalanceOrg", "newbalanceOrig", "oldbalanceDest", "newbalanceDest", "type", "merchant")
+formula <- as.formula(paste("isFraud ~", paste(predictor_vars, collapse = "+")))
+
+
+if (file.exists("new_model.hdf5")) {
+  
+  model <- load_model_hdf5("new_model.hdf5")
+  message("Loaded weights from checkpoint.")
+  
+} else {
+  
+  model <- keras_model_sequential() %>%
+  layer_dense(units = 4, activation = "relu", input_shape = length(predictor_vars)) %>%
+  layer_dense(units = 2, activation = "relu") %>%
+  layer_dense(units = 1, activation = "sigmoid")
+
+
+# Compile the model
+model %>% compile(
+  loss = "binary_crossentropy",
+  optimizer =  tf$keras$optimizers$legacy$Adam(),
+  metrics = "accuracy"
+)
+
+
+cp_callback <- callback_model_checkpoint(
+  filepath = checkpoint_path,
+  save_weights_only = TRUE,
+  verbose = 1
+)
+
+
+# Train the model
+history <- model %>% fit(
+  x = as.matrix(train[predictor_vars]),
+  y = train$isFraud,
+  epochs = 10,
+  batch_size = 100,
+  class_weights= c(1,1000),
+  validation_split = 0.3,  # Split data for validation
+  callbacks = list(cp_callback, early_stopping) # Pass callback to training
+)
+
+model %>% save_model_hdf5("./new_model.hdf5")
+  
+}
+
+# Evaluate the model
+model %>% evaluate(
+  x = as.matrix(test[predictor_vars]),
+  y = test$isFraud
+)
+
+```
+
+
+```{r}
+predicted_probs <- model %>% predict(as.matrix(test[predictor_vars]))
+predicted_classes <- ifelse(predicted_probs > 0.5, TRUE, FALSE)
+results <- data.frame(Actual = test$isFraud, Predicted = predicted_classes)
+conf_matrix <- table(Actual = results$Actual, Predicted = results$Predicted)
+print(conf_matrix)
+```
+
