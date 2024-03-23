@@ -1,8 +1,8 @@
 ---
 title: "Fraud Classification"
 output:
-  html_document: default
   pdf_document: default
+  html_document: default
 ---
 
 ## Business Question
@@ -92,6 +92,8 @@ Then, we need to determine the optimal lambda value to use which will be done us
 ```{r}
 library(glmnet)
 library(Matrix)
+library(doParallel)
+
 
 if (file.exists("./cv_model.RData")) {
   # load cv_model
@@ -100,9 +102,15 @@ if (file.exists("./cv_model.RData")) {
 } else {
   # create cv_model
   
+  num_cores <- 4
+  cl <- makeCluster(num_cores)
+  registerDoParallel(cl)
+  
   # perform k-fold cross-validation to find optimal lambda value (using the default k=10 folds)
   # use alpha=1 as we want to fit the lasso regression model
   cv_model <- cv.glmnet(x, y, alpha = 1, parallel = TRUE)
+  
+  stopCluster(cl)
   
   # save cv_model
   save(cv_model, file="./cv_model.RData")
@@ -121,6 +129,8 @@ plot(cv_model)
 
 Finally, we can use the optimal lambda value to determine coefficient estimates for each variable
 ```{r}
+
+
 if (file.exists("./regularized_model.RData")) {
   # load regularized_model
   load("./regularized_model.RData")
@@ -128,8 +138,15 @@ if (file.exists("./regularized_model.RData")) {
 } else {
   # create regularized_model
   
+  num_cores <- 4
+  cl <- makeCluster(num_cores)
+  registerDoParallel(cl)
+
+  
   # determine coefficient estimates for each variable of the regularized model
   regularized_model <- glmnet(x, y, alpha = 1, lambda = optimal_lambda)
+  
+  stopCluster(cl)
   
   # save regularized_model
   save(regularized_model, file="./regularized_model.RData")
