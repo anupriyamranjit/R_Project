@@ -1,0 +1,125 @@
+---
+title: "Decision Tree Classification"
+author: "Neel Shah (208347930, shah4102@mylaurier.ca)"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Decision Tree Classifier Model
+
+### Classifier Generation
+
+We can generate a decision tree classifier trained on the training set and evaluated on the testing set. Since complexity parameter (cp) controls the improvement threshold to make a split, we can compare different thresholds.
+```{r}
+# define and train each of the classifiers
+library(rpart)
+
+```
+
+```{r}
+if (file.exists("./tree1.RData")) {
+  # load tree1
+  load("./tree1.RData")
+  
+} else {
+  # create tree1
+  tree1 <- rpart(formula_object,method="class", data=train, cp=0.01)
+  
+  # save tree1
+  save(tree1, file="./tree1.RData")
+
+}
+
+
+```
+
+
+``` {r}
+if (file.exists("./tree2.RData")) {
+  # load tree2
+  load("./tree2.RData")
+  
+} else {
+  # create tree2
+  tree2 <- rpart(formula_object,method="class", data=train, cp=0.001)
+  
+  # save tree2
+  save(tree2, file="./tree2.RData")
+
+}
+
+```
+
+
+```{r}
+if (file.exists("./tree3.RData")) {
+  # load tree3
+  load("./tree3.RData")
+  
+} else {
+  # create tree3
+  tree3 <- rpart(formula_object,method="class", data=train, cp=0.00001)
+  
+  # save tree3
+  save(tree3, file="./tree3.RData")
+
+}
+
+```
+
+
+### Training and Testing Error Assessment
+
+Now, lets compare the training and testing error for cp=0.01, cp=0.001, and cp=0.00001
+```{r}
+treeErr <- function(tree, test_dataset, train_dataset)
+{
+  test_pred = predict(tree,test_dataset,type="class")
+  test_err = mean(test_dataset$isFraud != test_pred)
+  
+  
+  train_pred = predict(tree,train_dataset,type="class")
+  train_err = mean(train_dataset$isFraud != train_pred)
+  
+  test_acc = 1 - test_err
+  
+  conf_matrix <- table(Actual = test_dataset$isFraud, Predicted = test_pred)
+  
+  result_df <- data.frame(
+    Metric = c("Train Error", "Test Error", "Accuracy"),
+    Value = c(train_err, test_err, test_acc)
+  )
+  
+  return(list(result_df, Confusion_Matrix = conf_matrix))
+  
+}
+```
+
+
+```{r}
+# Errors for tree1
+tree1Err <- treeErr(tree1, test, train)
+print(tree1Err)
+
+```
+
+```{r}
+# Errors for tree2
+tree2Err <- treeErr(tree2, test, train)
+print(tree2Err)
+
+```
+
+```{r}
+# Errors for tree3
+tree3Err <- treeErr(tree3, test, train)
+print(tree3Err)
+
+```
+
+It is clear that for cp=0.01 the tree is underfit as it does not split and defaults to classifying all transactions as fraud. For cp=0.001 the training error and testing error improve but only slightly. For cp=0.000001, the tree is much more complex and we see evidence of overfitting.
