@@ -181,6 +181,38 @@ print(formula_object)
 
 ## Model 1: Logistic Regression
 
+For the first model, we generate a logistic regression classifier for the formula defined above. We train the model on the previously defined training set and evaluate this model using the testing set. We use a cut value of 0.5 since this is a widely accepted value and fits our case.
+```{r}
+if (file.exists("./logReg.RData")) {
+  # load classifier
+  load("./logReg.RData")
+} else {
+  # create classifier
+  cls <- glm(formula_object, family='binomial',data=train)
+  
+  # save classifier
+  save(cls, file="./logReg.RData")
+}
+```
+
+### Training and Testing Error Assessment
+
+Now, let's evaluate the training and testing error for the Logistic Regression Classifier
+```{r}
+cut=0.5
+
+yhat_tr = (predict(cls,train,type="response")>cut)
+tr.err = mean(train$isFraud != yhat_tr) 
+
+yhat_te = (predict(cls,test,type="response")>cut)
+te.err = mean(test$isFraud != yhat_te) 
+
+tr.err
+te.err
+```
+In this case, we see a very low error rate for the training set, which means the model is not underfit. 
+In addition, the testing error is very similar to the training error, meaning that the model is not overfit.
+
 ## Model 2: Decision Tree Classifier Model
 
 ### Classifier Generation
