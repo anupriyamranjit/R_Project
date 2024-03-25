@@ -363,14 +363,25 @@ if (file.exists("./svm.RData")) {
                  scale = TRUE) # Automatic feature scaling
   
   # save svm
-  save(tree1, file="./svm.RData")
+  save(svm_model, file="./svm.RData")
 
 }
 
 library(caret)
 
-# Predictions
-predictions <- predict(svm_model, newdata = test_svm)
+# Predictions on the training set
+train_predictions <- predict(svm_model, newdata = train_svm)
+
+# Predictions on the testing set
+test_predictions <- predict(svm_model, newdata = test_svm)
+
+# Calculating Training Error
+training_error <- mean(train_predictions != train_svm$isFraud)
+print(paste("Training Error: ", training_error))
+
+# Calculating Testing Error
+testing_error <- mean(test_predictions != test_svm$isFraud)
+print(paste("Testing Error: ", testing_error))
 
 # Confusion Matrix
 confusionMatrix(predictions, test_svm$isFraud)
