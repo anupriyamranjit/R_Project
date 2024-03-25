@@ -329,6 +329,53 @@ It is clear that for cp=0.01 the tree is underfit as it does not split and defau
 
 ## Model 3: Support Vector Machine (SVM) Model
 
+Since SVM takes a very long time to run for large dataset, we will use the data reduction strategy to randomly select a subset of our data for training and testing
+```{r}
+library(e1071)
+
+# Training / testing data for SVM
+set.seed(100) # Ensure reproducibility
+sample_size <- floor(0.1 * nrow(data_copy)) # Calculate 10% of the data size
+sample_indices <- sample(1:nrow(data_copy), size = sample_size) # Get random sample indices
+data_subset <- data_copy[sample_indices, ] # Extract 10% of the data
+
+set.seed(100)
+train_size <- floor(0.7 * nrow(data_subset)) # Calculate 70% of the subset size for training
+train_indices <- sample(1:nrow(data_subset), size = train_size) # Get random sample indices for training set
+
+train_svm <- data_subset[train_indices, ] # Create the training set from the subset
+test_svm <- data_subset[-train_indices, ] # Create the testing set from the subset
+
+
+train_svm$isFraud <- as.factor(train_svm$isFraud) #The target variable should be a factor
+test_svm$isFraud <- as.factor(test_svm$isFraud)
+
+if (file.exists("./svm.RData")) {
+  # load svm
+  load("./svm.RData")
+  
+} else {
+  # create svm
+  svm_model <- svm(formula = formula_object, 
+                 data = train_svm, 
+                 kernel = "radial", 
+                 cost = 1,
+                 scale = TRUE) # Automatic feature scaling
+  
+  # save svm
+  save(tree1, file="./svm.RData")
+
+}
+
+library(caret)
+
+# Predictions
+predictions <- predict(svm_model, newdata = test_svm)
+
+# Confusion Matrix
+confusionMatrix(predictions, test_svm$isFraud)
+
+```
 ## Model 4: K-Nearest Neighbours (KNN) Model
 
 ```{r}
