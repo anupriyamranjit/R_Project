@@ -199,16 +199,23 @@ if (file.exists("./logReg.RData")) {
 
 Now, let's evaluate the training and testing error for the Logistic Regression Classifier
 ```{r}
+# Set the cut to 0.5
 cut=0.5
 
+# Calculate Training error
 yhat_tr = (predict(cls,train,type="response")>cut)
 tr.err = mean(train$isFraud != yhat_tr) 
 
+
+# Calculate testing error
 yhat_te = (predict(cls,test,type="response")>cut)
 te.err = mean(test$isFraud != yhat_te) 
 
-tr.err
-te.err
+
+print("Training Error")
+print(tr.err)
+print("Testing Error")
+print(te.err)
 ```
 In this case, we see a very low error rate for the training set, which means the model is not underfit. 
 In addition, the testing error is very similar to the training error, meaning that the model is not overfit.
@@ -332,6 +339,7 @@ It is clear that for cp=0.01 the tree is underfit as it does not split and defau
 Since SVM takes a very long time to run for large dataset, we will use the data reduction strategy to randomly select a subset of our data for training and testing
 ```{r}
 library(e1071)
+library(caret)
 
 # Training / testing data for SVM
 set.seed(100) # Ensure reproducibility
@@ -356,8 +364,15 @@ if (file.exists("./svm.RData")) {
   
 } else {
   # create svm
+  
+  # Define the number of cores to use
+num_cores <- 4
+
+# Register parallel backend
+cl <- makeCluster(num_cores)
+registerDoParallel(cl)
   svm_model <- svm(formula = formula_object, 
-                 data = train_svm, 
+                 data = train, 
                  kernel = "radial", 
                  cost = 1,
                  scale = TRUE) # Automatic feature scaling
@@ -367,7 +382,7 @@ if (file.exists("./svm.RData")) {
 
 }
 
-library(caret)
+
 
 # Predictions on the training set
 train_predictions <- predict(svm_model, newdata = train_svm)
@@ -384,7 +399,11 @@ testing_error <- mean(test_predictions != test_svm$isFraud)
 print(paste("Testing Error: ", testing_error))
 
 # Confusion Matrix
-confusionMatrix(predictions, test_svm$isFraud)
+
+
+# Now, compute confusion matrix
+conf_matrix <- table(test_predictions, test_svm$isFraud)
+print(conf_matrix)
 
 ```
 ## Model 4: K-Nearest Neighbours (KNN) Model
@@ -398,18 +417,27 @@ library(doParallel)  # For parallel computation if needed
 
 # Example parallelization setup
 # Adjust the number of cores as per your machine's configuration
-cores <- 4
-registerDoParallel(cores=cores)
 
-class_labels <- train$isFraud  # Assuming "isFraud" is the target variable
-train_features <- train[, -which(names(train) == "isFraud")]  # Exclude the target variab
-test_features <- test[, -which(names(test) == "isFraud")]  # Exclude the target variab
+if(file.exists("./knn_model.rds")){
+  test_pred  <- readRDS("knn_model.rds")
+} else {
+  
+  cores <- 4
+  registerDoParallel(cores=cores)
+  
+  class_labels <- train$isFraud  # Assuming "isFraud" is the target variable
+  train_features <- train[, -which(names(train) == "isFraud")]  # Exclude the target variable
+  test_features <- test[, -which(names(test) == "isFraud")]  # Exclude the target variable
+  
+  # Example of using FNN library which might be faster
+  test_pred <- knn(train_features, test = test_features, cl = class_labels, k = 10)
+  
+  # Stop parallel computation
+  stopImplicitCluster()
+  
+}
 
-# Example of using FNN library which might be faster
-test_pred <- knn(train_features, test = test_features, cl = class_labels, k = 10)
 
-# Stop parallel computation
-stopImplicitCluster()
 
 
 
@@ -420,6 +448,7 @@ actual <- test$isFraud
 cm <- table(actual,test_pred)
 cm
 ```
+
 ```{r}
 accuracy <- sum(diag(cm))/length(actual)
 sprintf("KNN Accuracy: %.10f%%", accuracy*100)
@@ -500,10 +529,19 @@ model %>% evaluate(
 
 
 ```{r}
+# Predict probabilities using the model
 predicted_probs <- model %>% predict(as.matrix(test[predictor_vars]))
+
+# Convert probabilities to binary classes based on a threshold of 0.5
 predicted_classes <- ifelse(predicted_probs > 0.5, TRUE, FALSE)
+
+# Create a data frame to store actual and predicted values
 results <- data.frame(Actual = test$isFraud, Predicted = predicted_classes)
+
+# Create confusion matrix
 conf_matrix <- table(Actual = results$Actual, Predicted = results$Predicted)
+
+# Print the confusion matrix
 print(conf_matrix)
 ```
 
